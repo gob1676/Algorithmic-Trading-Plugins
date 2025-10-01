@@ -1,0 +1,87 @@
+# GESTEMA Trading - Dependencias Python
+
+# Framework web
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Base de datos
+sqlalchemy==2.0.23
+alembic==1.13.1
+psycopg2-binary==2.9.9
+sqlite3
+
+# Autenticación y seguridad
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.6
+pyotp==2.9.0
+cryptography==41.0.8
+
+# APIs y HTTP
+httpx==0.25.2
+requests==2.31.0
+aiofiles==23.2.1
+
+# Trading y finanzas
+yfinance==0.2.28
+alpaca-trade-api==3.1.1
+pandas==2.1.4
+numpy==1.25.2
+
+# Machine Learning e IA
+scikit-learn==1.3.2
+xgboost==2.0.3
+prophet==1.1.5
+torch==2.1.2
+transformers==4.36.2
+tensorflow==2.15.0
+
+# Análisis técnico
+ta-lib==0.4.28
+pandas-ta==0.3.14b
+
+# Optimización de portfolios
+PyPortfolioOpt==1.5.5
+cvxpy==1.4.1
+
+# Procesamiento de datos
+pandas==2.1.4
+numpy==1.25.2
+scipy==1.11.4
+
+# Visualización (para reportes)
+matplotlib==3.8.2
+plotly==5.17.0
+seaborn==0.13.0
+
+# Caché y sesiones
+redis==5.0.1
+python-redis==5.0.1
+
+# Procesamiento de archivos
+openpyxl==3.1.2
+reportlab==4.0.7
+python-docx==1.1.0
+
+# Utilidades
+python-dateutil==2.8.2
+pytz==2023.3
+schedule==1.2.0
+python-dotenv==1.0.0
+
+# Logging y monitoreo
+structlog==23.2.0
+prometheus-client==0.19.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+
+# Desarrollo
+black==23.11.0
+flake8==6.1.0
+isort==5.12.0
+mypy==1.7.1

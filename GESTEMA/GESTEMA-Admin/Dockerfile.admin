@@ -1,0 +1,221 @@
+# GESTEMA Admin - Dockerfile
+FROM python:3.11-slim
+
+# Información del contenedor
+LABEL maintainer="GESTEMA Team"
+LABEL description="GESTEMA Admin - Panel de Administración Exclusivo"
+LABEL version="1.0.0"
+
+# Variables de entorno
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Instalar dependencias del sistema para Admin
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    sqlite3 \
+    postgresql-client \
+    redis-tools \
+    libpq-dev \
+    libffi-dev \
+    libssl-dev \
+    pkg-config \
+    docker.io \
+    qrencode \
+    imagemagick \
+    pandoc \
+    texlive-latex-base \
+    wkhtmltopdf \
+    supervisor \
+    htop \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear usuario admin no-root
+RUN groupadd -r gestema-admin && useradd -r -g gestema-admin gestema-admin
+
+# Agregar usuario al grupo docker para gestión de contenedores
+RUN usermod -aG docker gestema-admin
+
+# Crear directorios de trabajo
+WORKDIR /app
+
+# Crear estructura de directorios Admin
+RUN mkdir -p \
+    data_admin/{users,logs,backups,staging_backups} \
+    reports_admin/{security,performance,changes} \
+    config/secrets \
+    staging \
+    trading \
+    logs \
+    ia_models
+
+# Copiar requirements Admin y instalar dependencias Python
+COPY backend/requirements_admin.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements_admin.txt
+
+# Instalar dependencias adicionales para IAs Admin
+RUN pip install --no-cache-dir \
+    torch==2.1.2 \
+    transformers==4.36.2 \
+    scikit-learn==1.3.2 \
+    pandas==2.1.4 \
+    numpy==1.25.2 \
+    openai==1.3.7 \
+    anthropic==0.8.1 \
+    langchain==0.1.0 \
+    docker==6.1.3 \
+    psutil==5.9.6
+
+# Copiar código de la aplicación Admin
+COPY backend/ ./
+COPY config/ ./config/
+COPY docs_admin/ ./docs_admin/
+
+# Crear script de inicialización Admin
+RUN cat > /app/init_admin.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "Inicializando GESTEMA Admin..."
+
+# Verificar base de datos Admin
+if [ ! -f "/app/data_admin/admin.db" ]; then
+    echo "Creando base de datos Admin inicial..."
+    python -c "
+import sqlite3
+from datetime import datetime
+
+conn = sqlite3.connect('/app/data_admin/admin.db')
+cursor = conn.cursor()
+
+# Crear tablas Admin
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS admin_users (
+    id INTEGER PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    mfa_secret TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP,
+    login_attempts INTEGER DEFAULT 0,
+    locked_until TIMESTAMP
+)
+''')
+
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    action TEXT NOT NULL,
+    resource TEXT,
+    details TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    success BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (user_id) REFERENCES admin_users (id)
+)
+''')
+
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS system_metrics (
+    id INTEGER PRIMARY KEY,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cpu_percent REAL,
+    memory_percent REAL,
+    disk_percent REAL,
+    network_bytes_sent INTEGER,
+    network_bytes_recv INTEGER,
+    processes INTEGER,
+    load_avg_1m REAL,
+    load_avg_5m REAL,
+    load_avg_15m REAL
+)
+''')
+
+conn.commit()
+conn.close()
+print('Base de datos Admin inicializada')
+"
+fi
+
+# Verificar configuración Admin
+if [ ! -f "/app/config/.env.admin" ]; then
+    echo "Creando configuración Admin por defecto..."
+    cat > /app/config/.env.admin << EOL
+ADMIN_DATABASE_URL=sqlite:///./data_admin/admin.db
+ENVIRONMENT=production
+DEBUG=false
+ADMIN_PORT=8001
+MFA_REQUIRED=true
+EOL
+fi
+
+# Crear directorio para modelos IA si no existe
+if [ ! -d "/app/ia_models" ]; then
+    echo "Creando directorio para modelos IA Admin..."
+    mkdir -p /app/ia_models
+fi
+
+# Verificar permisos Docker
+if [ -S "/var/run/docker.sock" ]; then
+    echo "Socket Docker disponible para gestión de contenedores"
+else
+    echo "ADVERTENCIA: Socket Docker no disponible"
+fi
+
+echo "Inicialización Admin completada"
+exec "$@"
+EOF
+
+RUN chmod +x /app/init_admin.sh
+
+# Configurar supervisor para múltiples servicios
+RUN cat > /etc/supervisor/conf.d/gestema-admin.conf << 'EOF'
+[supervisord]
+nodaemon=true
+user=root
+
+[program:gestema-admin-api]
+command=python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
+directory=/app
+user=gestema-admin
+autostart=true
+autorestart=true
+stdout_logfile=/app/logs/admin-api.log
+stderr_logfile=/app/logs/admin-api-error.log
+
+[program:system-monitor]
+command=python system_monitor.py
+directory=/app/backend
+user=gestema-admin
+autostart=true
+autorestart=true
+stdout_logfile=/app/logs/monitor.log
+stderr_logfile=/app/logs/monitor-error.log
+EOF
+
+# Configurar permisos
+RUN chown -R gestema-admin:gestema-admin /app && \
+    chmod -R 755 /app && \
+    chmod -R 700 /app/data_admin /app/config/secrets
+
+# Cambiar al usuario admin
+USER gestema-admin
+
+# Exponer puerto Admin
+EXPOSE 8001
+
+# Health check Admin
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Comando de inicio Admin
+ENTRYPOINT ["/app/init_admin.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/gestema-admin.conf"]
