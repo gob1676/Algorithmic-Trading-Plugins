@@ -1,0 +1,1 @@
+{\n  "appName": "GESTEMA Admin",\n  "i18n": ["es", "en"],\n  "security": {\n    "hash": "bcrypt",\n    "mfaMandatory": true\n  }\n}

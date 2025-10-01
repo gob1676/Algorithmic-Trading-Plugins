@@ -1,0 +1,1 @@
+{\n  "appName": "GESTEMA Trading",\n  "i18n": ["es", "en"],\n  "security": {\n    "hash": "argon2",\n    "jwtExpiry": "12h"\n  }\n}
