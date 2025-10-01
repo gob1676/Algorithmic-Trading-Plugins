@@ -1,0 +1,180 @@
+# GESTEMA TRADING - Configuración Principal
+
+app:
+  name: "GESTEMA TRADING"
+  version: "1.0.0"
+  description: "Plataforma de trading con Multi-IA para ETFs"
+  author: "GESTEMA Team"
+  environment: "development"  # development, staging, production
+
+# Configuración del servidor
+server:
+  host: "127.0.0.1"
+  port: 8000
+  debug: true
+  workers: 4
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+
+# Base de datos
+database:
+  url: "postgresql://gestema:gestema123@localhost:5432/gestema_trading"
+  pool_size: 10
+  max_overflow: 20
+  echo: false
+
+# Redis para cache y colas
+redis:
+  url: "redis://localhost:6379/0"
+  password: null
+  max_connections: 10
+
+# Seguridad
+security:
+  secret_key: "your-secret-key-change-in-production"
+  algorithm: "HS256"
+  access_token_expire_minutes: 30
+  refresh_token_expire_days: 7
+  password_hash_algorithm: "bcrypt"
+  mfa_required: false
+  encryption_key: "your-encryption-key-32-chars"
+
+# Trading
+trading:
+  default_currency: "USD"
+  supported_currencies: ["USD", "EUR", "GBP"]
+  min_order_amount: 1.0
+  max_order_amount: 1000000.0
+  default_commission: 0.001  # 0.1%
+  risk_management:
+    max_position_size: 0.1  # 10% del portafolio
+    stop_loss_percentage: 0.05  # 5%
+    take_profit_percentage: 0.15  # 15%
+
+# Brokers
+brokers:
+  alpaca:
+    enabled: true
+    sandbox_url: "https://paper-api.alpaca.markets"
+    live_url: "https://api.alpaca.markets"
+    api_version: "v2"
+  interactive_brokers:
+    enabled: false
+    gateway_url: "localhost:7497"
+  td_ameritrade:
+    enabled: false
+    api_url: "https://api.tdameritrade.com"
+  charles_schwab:
+    enabled: false
+    api_url: "https://api.schwabapi.com"
+  robinhood:
+    enabled: false
+    api_url: "https://api.robinhood.com"
+
+# IA Committee
+ai_committee:
+  enabled: true
+  voting_threshold: 0.6  # 60% de consenso
+  models:
+    predictive:
+      - name: "prophet"
+        weight: 0.3
+        enabled: true
+      - name: "arima"
+        weight: 0.2
+        enabled: true
+      - name: "lstm"
+        weight: 0.3
+        enabled: true
+      - name: "xgboost"
+        weight: 0.2
+        enabled: true
+    explanatory:
+      - name: "qwen"
+        weight: 0.4
+        enabled: true
+      - name: "mistral"
+        weight: 0.3
+        enabled: true
+      - name: "finbert"
+        weight: 0.3
+        enabled: true
+    optimizer:
+      - name: "pyportfolioopt"
+        weight: 1.0
+        enabled: true
+    assistant:
+      - name: "qwen_instruct"
+        weight: 1.0
+        enabled: true
+
+# Plugins
+plugins:
+  enabled: true
+  directory: "./plugins"
+  auto_load: true
+  types:
+    - "indicator"
+    - "ai_model"
+    - "broker"
+    - "dashboard"
+    - "datasource"
+
+# Gamificación
+gamification:
+  enabled: true
+  xp_per_trade: 10
+  xp_per_achievement: 50
+  levels:
+    - name: "Novato"
+      xp_required: 0
+    - name: "Aprendiz"
+      xp_required: 100
+    - name: "Intermedio"
+      xp_required: 500
+    - name: "Avanzado"
+      xp_required: 1500
+    - name: "Experto"
+      xp_required: 5000
+    - name: "Maestro"
+      xp_required: 15000
+
+# Logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "./logs/gestema_trading.log"
+  max_size: "10MB"
+  backup_count: 5
+  audit_log: "./logs/audit.log"
+
+# Internacionalización
+i18n:
+  default_language: "es"
+  supported_languages: ["es", "en"]
+  fallback_language: "en"
+
+# Accesibilidad
+accessibility:
+  high_contrast: false
+  screen_reader: false
+  keyboard_navigation: true
+  font_size: "medium"  # small, medium, large, xlarge
+
+# Reportes
+reports:
+  directory: "./reports"
+  formats: ["pdf", "excel", "csv"]
+  retention_days: 90
+  auto_generate: true
+  schedule: "daily"  # daily, weekly, monthly
+
+# Backup
+backup:
+  enabled: true
+  directory: "./backup"
+  schedule: "daily"
+  retention_days: 30
+  encryption: true
+  compression: true

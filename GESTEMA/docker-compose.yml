@@ -1,0 +1,217 @@
+# GESTEMA - Docker Compose Configuration
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: gestema-postgres
+    environment:
+      POSTGRES_DB: gestema_trading
+      POSTGRES_USER: gestema
+      POSTGRES_PASSWORD: gestema123
+      POSTGRES_MULTIPLE_DATABASES: gestema_trading,gestema_admin
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - gestema-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gestema -d gestema_trading"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis para cache y colas
+  redis:
+    image: redis:7-alpine
+    container_name: gestema-redis
+    command: redis-server --appendonly yes --requirepass redis123
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - gestema-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # GESTEMA TRADING Backend
+  gestema-trading-backend:
+    build:
+      context: ./GESTEMA-Trading
+      dockerfile: Dockerfile
+    container_name: gestema-trading-backend
+    environment:
+      - DATABASE_URL=postgresql://gestema:gestema123@postgres:5432/gestema_trading
+      - REDIS_URL=redis://:redis123@redis:6379/0
+      - ENVIRONMENT=production
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    volumes:
+      - ./GESTEMA-Trading/data:/app/data
+      - ./GESTEMA-Trading/logs:/app/logs
+      - ./GESTEMA-Trading/reports:/app/reports
+      - ./GESTEMA-Trading/backup:/app/backup
+      - ./GESTEMA-Trading/plugins:/app/plugins
+      - ./GESTEMA-Trading/config:/app/config
+    ports:
+      - "8000:8000"
+    networks:
+      - gestema-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # GESTEMA TRADING Frontend
+  gestema-trading-frontend:
+    build:
+      context: ./GESTEMA-Trading/frontend
+      dockerfile: Dockerfile
+    container_name: gestema-trading-frontend
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_APP_NAME=GESTEMA TRADING
+    ports:
+      - "3000:3000"
+    networks:
+      - gestema-network
+    depends_on:
+      - gestema-trading-backend
+    restart: unless-stopped
+
+  # GESTEMA ADMIN Backend
+  gestema-admin-backend:
+    build:
+      context: ./GESTEMA-Admin
+      dockerfile: Dockerfile
+    container_name: gestema-admin-backend
+    environment:
+      - DATABASE_URL=postgresql://gestema_admin:admin123@postgres:5432/gestema_admin
+      - REDIS_URL=redis://:redis123@redis:6379/1
+      - ENVIRONMENT=production
+      - SECRET_KEY=${ADMIN_SECRET_KEY}
+      - ENCRYPTION_KEY=${ADMIN_ENCRYPTION_KEY}
+      - GESTEMA_TRADING_PATH=/app/../GESTEMA-Trading
+    volumes:
+      - ./GESTEMA-Admin/logs:/app/logs
+      - ./GESTEMA-Admin/staging:/app/staging
+      - ./GESTEMA-Admin/backup:/app/backup
+      - ./GESTEMA-Admin/vault:/app/vault
+      - ./GESTEMA-Admin/temp:/app/temp
+      - ./GESTEMA-Admin/config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8001:8001"
+    networks:
+      - gestema-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # GESTEMA ADMIN Frontend
+  gestema-admin-frontend:
+    build:
+      context: ./GESTEMA-Admin/frontend
+      dockerfile: Dockerfile
+    container_name: gestema-admin-frontend
+    environment:
+      - VITE_API_URL=http://localhost:8001
+      - VITE_APP_NAME=GESTEMA ADMIN
+    ports:
+      - "3001:3001"
+    networks:
+      - gestema-network
+    depends_on:
+      - gestema-admin-backend
+    restart: unless-stopped
+
+  # Nginx como proxy reverso
+  nginx:
+    image: nginx:alpine
+    container_name: gestema-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - gestema-network
+    depends_on:
+      - gestema-trading-frontend
+      - gestema-admin-frontend
+    restart: unless-stopped
+
+  # Celery Worker para tareas asíncronas
+  celery-worker:
+    build:
+      context: ./GESTEMA-Trading
+      dockerfile: Dockerfile
+    container_name: gestema-celery-worker
+    command: celery -A main.celery worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://gestema:gestema123@postgres:5432/gestema_trading
+      - REDIS_URL=redis://:redis123@redis:6379/0
+    volumes:
+      - ./GESTEMA-Trading/data:/app/data
+      - ./GESTEMA-Trading/logs:/app/logs
+    networks:
+      - gestema-network
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  # Celery Beat para tareas programadas
+  celery-beat:
+    build:
+      context: ./GESTEMA-Trading
+      dockerfile: Dockerfile
+    container_name: gestema-celery-beat
+    command: celery -A main.celery beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://gestema:gestema123@postgres:5432/gestema_trading
+      - REDIS_URL=redis://:redis123@redis:6379/0
+    volumes:
+      - ./GESTEMA-Trading/data:/app/data
+      - ./GESTEMA-Trading/logs:/app/logs
+    networks:
+      - gestema-network
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  gestema-network:
+    driver: bridge
