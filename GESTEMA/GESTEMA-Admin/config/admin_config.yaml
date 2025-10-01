@@ -1,0 +1,223 @@
+# GESTEMA ADMIN - Configuración Principal
+
+app:
+  name: "GESTEMA ADMIN"
+  version: "1.0.0"
+  description: "Panel de administración y mantenimiento para GESTEMA"
+  author: "GESTEMA Team"
+  environment: "development"  # development, staging, production
+
+# Configuración del servidor
+server:
+  host: "127.0.0.1"
+  port: 8001
+  debug: true
+  workers: 2
+  cors_origins:
+    - "http://localhost:3001"
+    - "http://127.0.0.1:3001"
+
+# Base de datos administrativa
+database:
+  url: "postgresql://gestema_admin:admin123@localhost:5432/gestema_admin"
+  pool_size: 5
+  max_overflow: 10
+  echo: false
+
+# Redis para cache y colas
+redis:
+  url: "redis://localhost:6379/1"
+  password: null
+  max_connections: 5
+
+# Seguridad administrativa
+security:
+  secret_key: "admin-secret-key-change-in-production"
+  algorithm: "HS256"
+  access_token_expire_minutes: 15  # Más corto para admin
+  refresh_token_expire_days: 1
+  password_hash_algorithm: "argon2"
+  mfa_required: true  # Obligatorio para admin
+  encryption_key: "admin-encryption-key-32-chars"
+  session_timeout_minutes: 30
+  max_login_attempts: 3
+  lockout_duration_minutes: 15
+
+# Localización de instalaciones
+installation_locator:
+  enabled: true
+  search_paths:
+    - "/opt/gestema"
+    - "/home/*/gestema"
+    - "/workspace/gestema"
+    - "/usr/local/gestema"
+  auto_discovery: true
+  check_interval_minutes: 5
+  health_check_timeout: 10
+
+# Entorno de Staging
+staging:
+  enabled: true
+  directory: "./staging"
+  auto_cleanup: true
+  cleanup_after_hours: 24
+  max_staging_instances: 3
+  resource_limits:
+    cpu_percent: 50
+    memory_mb: 1024
+    disk_mb: 2048
+
+# Gestión de Actualizaciones
+updates:
+  enabled: true
+  auto_check: true
+  check_interval_hours: 6
+  sources:
+    - type: "git"
+      url: "https://github.com/gestema/trading.git"
+      branch: "main"
+    - type: "git"
+      url: "https://github.com/gestema/admin.git"
+      branch: "main"
+  staging_required: true
+  approval_required: true
+  rollback_enabled: true
+  backup_before_update: true
+
+# IA Intérprete
+ai_interpreter:
+  enabled: true
+  model: "qwen2.5-7b-instruct"
+  max_tokens: 4096
+  temperature: 0.1
+  timeout_seconds: 30
+  supported_languages: ["python", "javascript", "typescript", "yaml", "json"]
+  code_validation: true
+  security_scan: true
+
+# IA Evaluadora
+ai_evaluator:
+  enabled: true
+  model: "qwen2.5-7b-instruct"
+  risk_threshold: 0.7
+  security_threshold: 0.8
+  performance_threshold: 0.6
+  stability_threshold: 0.7
+  auto_approve_low_risk: false
+
+# IA Documentadora
+ai_documenter:
+  enabled: true
+  model: "qwen2.5-7b-instruct"
+  auto_generate_changelog: true
+  changelog_format: "markdown"
+  include_code_changes: true
+  include_performance_metrics: true
+
+# Monitoreo del Sistema
+system_monitor:
+  enabled: true
+  check_interval_seconds: 30
+  metrics:
+    cpu: true
+    memory: true
+    disk: true
+    network: true
+    gpu: false  # Si está disponible
+  alerts:
+    cpu_threshold: 80
+    memory_threshold: 85
+    disk_threshold: 90
+    response_time_threshold: 5000  # ms
+  retention_days: 30
+
+# Programación de Tareas
+scheduler:
+  enabled: true
+  timezone: "UTC"
+  max_concurrent_jobs: 5
+  job_timeout_minutes: 60
+  retry_failed_jobs: true
+  max_retries: 3
+
+# Notificaciones
+notifications:
+  enabled: true
+  channels:
+    email:
+      enabled: false
+      smtp_server: "smtp.gmail.com"
+      smtp_port: 587
+      username: ""
+      password: ""
+    desktop:
+      enabled: true
+    webhook:
+      enabled: false
+      url: ""
+  events:
+    - "update_available"
+    - "update_applied"
+    - "update_failed"
+    - "system_alert"
+    - "security_alert"
+    - "staging_complete"
+
+# Logs de Auditoría
+audit:
+  enabled: true
+  log_all_actions: true
+  immutable_logs: true
+  encryption: true
+  compression: true
+  retention_days: 365
+  file: "./logs/audit.log"
+  max_size: "50MB"
+  backup_count: 10
+
+# Control de Versiones
+version_control:
+  enabled: true
+  git_enabled: true
+  auto_commit: true
+  commit_message_template: "Auto-update: {description}"
+  tag_releases: true
+  rollback_enabled: true
+  max_rollback_versions: 10
+
+# Comparación de Rendimiento
+performance_comparison:
+  enabled: true
+  metrics:
+    - "response_time"
+    - "throughput"
+    - "error_rate"
+    - "resource_usage"
+    - "ai_performance"
+  baseline_duration_hours: 24
+  comparison_duration_hours: 24
+  auto_rollback_threshold: 0.2  # 20% degradación
+
+# Vault de Credenciales
+vault:
+  enabled: true
+  encryption: "AES-256"
+  key_rotation_days: 90
+  backup_enabled: true
+  recovery_enabled: true
+
+# Logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "./logs/gestema_admin.log"
+  max_size: "10MB"
+  backup_count: 5
+  audit_log: "./logs/admin_audit.log"
+
+# Desarrollo y Debug
+development:
+  hot_reload: true
+  debug_toolbar: true
+  profiling: false
+  test_mode: false
