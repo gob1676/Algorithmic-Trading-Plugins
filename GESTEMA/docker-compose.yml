@@ -1,0 +1,226 @@
+version: '3.8'
+
+services:
+  # GESTEMA Trading - Aplicación Principal
+  gestema-trading-backend:
+    build:
+      context: ./GESTEMA-Trading
+      dockerfile: Dockerfile
+    container_name: gestema-trading-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/gestema.db
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./GESTEMA-Trading/data:/app/data
+      - ./GESTEMA-Trading/config:/app/config
+      - ./GESTEMA-Trading/logs:/app/logs
+      - ./GESTEMA-Trading/reports:/app/reports
+      - ./GESTEMA-Trading/backup:/app/backup
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - gestema-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  gestema-trading-frontend:
+    build:
+      context: ./GESTEMA-Trading/frontend
+      dockerfile: Dockerfile
+    container_name: gestema-trading-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_ENVIRONMENT=production
+    depends_on:
+      - gestema-trading-backend
+    networks:
+      - gestema-network
+    restart: unless-stopped
+
+  # GESTEMA Admin - Aplicación de Administración
+  gestema-admin-backend:
+    build:
+      context: ./GESTEMA-Admin
+      dockerfile: Dockerfile.admin
+    container_name: gestema-admin-backend
+    ports:
+      - "8001:8001"
+    environment:
+      - ADMIN_DATABASE_URL=sqlite:///./data_admin/admin.db
+      - ENVIRONMENT=production
+      - TRADING_PATH=/app/trading
+      - STAGING_PATH=/app/staging
+    volumes:
+      - ./GESTEMA-Admin/data_admin:/app/data_admin
+      - ./GESTEMA-Admin/config:/app/config
+      - ./GESTEMA-Admin/backend/logs:/app/logs
+      - ./GESTEMA-Admin/staging_env:/app/staging
+      - ./GESTEMA-Trading:/app/trading:ro  # Solo lectura para monitoreo
+      - /var/run/docker.sock:/var/run/docker.sock  # Para gestión de contenedores
+    depends_on:
+      - gestema-trading-backend
+    networks:
+      - gestema-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  gestema-admin-frontend:
+    build:
+      context: ./GESTEMA-Admin/frontend
+      dockerfile: Dockerfile
+    container_name: gestema-admin-frontend
+    ports:
+      - "3001:3001"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8001
+      - REACT_APP_ENVIRONMENT=production
+      - REACT_APP_ADMIN_MODE=true
+    depends_on:
+      - gestema-admin-backend
+    networks:
+      - gestema-network
+    restart: unless-stopped
+
+  # Base de datos PostgreSQL (opcional, por defecto usa SQLite)
+  postgres:
+    image: postgres:15-alpine
+    container_name: gestema-postgres
+    environment:
+      - POSTGRES_DB=gestema
+      - POSTGRES_USER=gestema_user
+      - POSTGRES_PASSWORD=gestema_secure_password_2025
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./GESTEMA-Trading/backup/postgres:/backup
+    networks:
+      - gestema-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gestema_user -d gestema"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis para caché y sesiones
+  redis:
+    image: redis:7-alpine
+    container_name: gestema-redis
+    command: redis-server --appendonly yes --requirepass gestema_redis_password_2025
+    volumes:
+      - redis_data:/data
+    networks:
+      - gestema-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx como proxy reverso y balanceador de carga
+  nginx:
+    image: nginx:alpine
+    container_name: gestema-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - gestema-trading-frontend
+      - gestema-admin-frontend
+    networks:
+      - gestema-network
+    restart: unless-stopped
+
+  # Monitor del sistema (Prometheus + Grafana)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gestema-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - gestema-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gestema-grafana
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=gestema_grafana_admin_2025
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - gestema-network
+    restart: unless-stopped
+
+  # Backup automático
+  backup-service:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    container_name: gestema-backup
+    environment:
+      - BACKUP_SCHEDULE=0 2 * * *  # Diario a las 2 AM
+      - BACKUP_RETENTION_DAYS=30
+    volumes:
+      - ./GESTEMA-Trading/data:/backup/source/trading:ro
+      - ./GESTEMA-Admin/data_admin:/backup/source/admin:ro
+      - ./backup/storage:/backup/destination
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - gestema-trading-backend
+      - gestema-admin-backend
+    networks:
+      - gestema-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  gestema-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
