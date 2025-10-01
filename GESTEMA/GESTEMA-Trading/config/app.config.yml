@@ -1,0 +1,8 @@
+app:
+  name: GESTEMA TRADING
+  locale_default: es
+security:
+  data_dir: ../data
+  encrypted: true
+plugins:
+  enabled: []

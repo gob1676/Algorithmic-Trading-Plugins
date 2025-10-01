@@ -1,0 +1,6 @@
+app:
+  name: GESTEMA ADMIN
+  admin_mfa_required: true
+staging:
+  enabled: true
+  target_path: ../GESTEMA-Trading
