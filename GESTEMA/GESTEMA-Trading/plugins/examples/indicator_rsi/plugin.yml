@@ -1,0 +1,7 @@
+name: RSI Indicator
+id: indicator.rsi
+version: 0.1.0
+type: indicator
+entrypoint: rsi.py
+description: Example RSI plugin skeleton.
+enabled: false
